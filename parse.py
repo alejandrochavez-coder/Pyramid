@@ -19,7 +19,7 @@ def tokenize(expression: str) -> list[Token]:
     tokens: list[Token] = []
 
     operators: set[str] = {
-        "+", "-", "/", "(", ")", "="
+        "+", "-", "/", "*", "(", ")", "="
     }
 
     buffer: str = ""
@@ -47,24 +47,37 @@ def tokenize(expression: str) -> list[Token]:
 
     return tokens
 
-def parse_tokens(tokens: list[Token]) -> Expression:
+def parse_tokens(tokens: list[Token], right_binding: float = 0) -> Expression:
+    if tokens[-1] == ")":
+        tokens.pop()
+        return parse_tokens(tokens, right_binding - 1)
+
     right = Expression(tokens.pop(), [])
+
+    bindings: dict[str, int] = {
+        "+": 1,
+        "-": 1,
+        "*": 2,
+        "/": 2
+    }
+
     while tokens:
-        
-        # if not tokens:
-        #     return Expression(right, [])
-        
-        operator = tokens.pop()
-        # left = tokens.pop()
-        left = parse_tokens(tokens)
-        return Expression(operator, [left, right])
+        operator = tokens[-1]
+        if operator == "(":
+            continue
+
+        operator_power = bindings[operator.value]
+
+        if operator_power < right_binding:
+            break
+
+        tokens.pop()
+
+        left = parse_tokens(tokens, operator_power)
+        right = Expression(operator, [left, right])
 
     return right
             
-# tokens = tokenize("x'' - x' / (x' + 1) = -3")
-# tokens = tokenize("x'' - x' / x' + 1 = -3")
-# tokens = tokenize("x'' - x' / x' + 1")
-
 def expression_to_string(expression: Expression) -> str:
     if not expression.arguments:
         return expression.token.value
@@ -77,10 +90,8 @@ def expression_to_string(expression: Expression) -> str:
     return f"({expression.token.value} {" ".join(arguments)})"
 
     
-tokens = tokenize("x'' / x' - x")
+tokens = tokenize("x'' / ((x' * x))")
 parsed = parse_tokens(tokens)
-
-
 
 print(expression_to_string(parsed))
 
@@ -88,3 +99,7 @@ print(expression_to_string(parsed))
 #     parsed.append(f"{token.value} {token.type.name}")
 
 # print(" \n".join(parsed))
+
+# tokens = tokenize("x'' - x' / (x' + 1) = -3")
+# tokens = tokenize("x'' - x' / x' + 1 = -3")
+# tokens = tokenize("x'' - x' / x' + 1")
