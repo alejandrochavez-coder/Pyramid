@@ -1,30 +1,15 @@
-from enum import Enum, auto
 from dataclasses import dataclass
-
-class TokenType(Enum):
-    OPERATOR = auto()
-    VARIABLE = auto()
-
-@dataclass
-class Token():
-    type: TokenType
-    value: str
 
 @dataclass
 class Expression():
-    token: Token
+    token: str
     arguments: list[Expression]
 
-def tokenize(expression: str) -> list[Token]:
-    tokens: list[Token] = []
-
-    operators: set[str] = {
-        "+", "-", "/", "*", "(", ")", "="
-    }
-
+def tokenize(equation: str, operators: set[str]) -> list[str]:
+    tokens: list[str] = []
     buffer: str = ""
 
-    for char in expression:
+    for char in equation:
 
         if char == " ":
             continue
@@ -34,64 +19,67 @@ def tokenize(expression: str) -> list[Token]:
             continue
 
         if buffer:
-            token = Token(TokenType.VARIABLE, buffer)
-            tokens.append(token)
+            tokens.append(buffer)
 
-        token = Token(TokenType.OPERATOR, char)
-        tokens.append(token)
+        tokens.append(char)
         buffer = ""
 
     if buffer:
-        token = Token(TokenType.VARIABLE, buffer)
-        tokens.append(token)
+        tokens.append(buffer)
 
     return tokens
 
-def parse_tokens(tokens: list[Token], right_binding: float = 0) -> Expression:
-    if tokens[-1] == ")":
-        tokens.pop()
-        return parse_tokens(tokens, right_binding - 1)
-
-    right = Expression(tokens.pop(), [])
-
-    bindings: dict[str, int] = {
-        "+": 1,
-        "-": 1,
-        "*": 2,
-        "/": 2
-    }
-
-    while tokens:
-        operator = tokens[-1]
-        if operator == "(":
-            continue
-
-        operator_power = bindings[operator.value]
-
-        if operator_power < right_binding:
-            break
-
-        tokens.pop()
-
-        left = parse_tokens(tokens, operator_power)
-        right = Expression(operator, [left, right])
-
-    return right
-            
 def expression_to_string(expression: Expression) -> str:
     if not expression.arguments:
-        return expression.token.value
+        return expression.token
 
     arguments: list[str] = []
 
     for argument in expression.arguments:
         arguments.append(expression_to_string(argument))
 
-    return f"({expression.token.value} {" ".join(arguments)})"
+    return f"({expression.token} {" ".join(arguments)})"
 
+def parse_tokens(tokens: list[str], bindings: dict[str, int], right_binding: float = 0) -> Expression:
+    right = Expression(tokens.pop(), [])
+    if right.token == ")":
+        right = parse_tokens(tokens, bindings, 0)
+        tokens.pop()
+
+    while tokens:
+        peek = tokens[-1]
+        if peek == "(" or bindings[peek] < right_binding:
+            break
+
+        operator = tokens.pop()
+        left = parse_tokens(tokens, bindings, bindings[operator])
+        right = Expression(peek, [left, right])
+
+    return right
+
+def isolate_highest_derivative(expression: Expression):
+    if expression.token == "=":
+        
+        left = expression.arguments[0]
+        right = expression.arguments[1]
+
+    token = expression.token
+
+    for argument in expression.arguments:
+        isolate_highest_derivative(argument)
+        
     
-tokens = tokenize("x'' / ((x' * x))")
-parsed = parse_tokens(tokens)
+bindings: dict[str, int] = {
+    "+": 1,
+    "-": 1,
+    "/": 2,
+    "*": 2,
+    "=": 0
+}
+
+tokens = tokenize("x'' - 1 = 3", bindings.keys() | {"(", ")"})
+parsed = parse_tokens(tokens, bindings)
+
 
 print(expression_to_string(parsed))
 
