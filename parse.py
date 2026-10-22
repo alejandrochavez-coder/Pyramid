@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 from typing import Callable
-import string
+from enum import Enum, auto
+
+class MathProperties(Enum):
+    ASOCIATIVE = auto()
 
 @dataclass
 class Expression():
@@ -11,6 +14,7 @@ class Expression():
 class Binding():
     priority: int
     default: str
+    properties: list[MathProperties]
     evaluation: Callable[[float, float], float] | None = None
 
 def tokenize(equation: str, bindings: dict[str, Binding]) -> list[str]:
@@ -143,27 +147,31 @@ def pre_compute_expression_leaves(expression: Expression, bindings: dict[str, Bi
 
 #     return expression
 
-def simplify_expression(expression: Expression) -> Expression:
+def simplify_expression(expression: Expression, bindings: dict[str, Binding]) -> Expression:
 
     if not expression.arguments:
         return expression
 
     for index, argument in enumerate(expression.arguments):
-        expression.arguments[index] = simplify_expression(argument)
+        expression.arguments[index] = simplify_expression(argument, bindings)
 
     token = expression.token
 
-    simplified = Expression("+", [])
+    simplified = Expression(token, [])
     for argument in expression.arguments:
-        if token != "+":
-            continue
-        
-        if argument.token == "+":
+
+        if argument.token == token and MathProperties.ASOCIATIVE in bindings[token].properties:
             simplified.arguments.extend(argument.arguments)
         else:
             simplified.arguments.append(argument)
 
-    print(expression_to_string(simplified))
+    if token == "-":
+        right = expression.arguments[1]
+        right = Expression("*", [Expression("-1", None), right])
+        right = simplify_expression(right, bindings)
+
+        return Expression("+", [expression.arguments[0], right])
+
     if simplified.arguments:
         return simplified
     
@@ -187,25 +195,26 @@ def find_highest_derivative(expression: Expression) -> str:
     return derivative
     
 bindings: dict[str, Binding] = {
-    "+": Binding(1, "0", lambda a, b: a + b),
-    "-": Binding(1, "0", lambda a, b: a - b),
-    "/": Binding(2, "1", lambda a, b: a / b),
-    "*": Binding(2, "1", lambda a, b: a * b),
-    "=": Binding(0, "x'")
+    "+": Binding(1, "0", [MathProperties.ASOCIATIVE]),
+    "-": Binding(1, "0", []),
+    "*": Binding(2, "1", [MathProperties.ASOCIATIVE]),
+    "/": Binding(2, "1", []),
+    "=": Binding(0, "x'", [])
 }
 
 # tokens = tokenize("- 1 + (x'' * 3) - 1 + 1 + x * x'", bindings)
 # tokens = tokenize("x + 2 * 3 + 7 + 2 - 5 * 3", bindings)
 # tokens = tokenize("- 1 + (x'' * 3) - 1 + 1 + x * x'", bindings)
-tokens = tokenize("4 *", bindings)
-print(tokens)
+tokens = tokenize("4 + x + 4 - x", bindings)
+# print(tokens)
 
 expression = tokens_to_expression(tokens, bindings)
+expression = simplify_expression(expression, bindings)
+
 print(expression_to_string(expression))
 # if tokens.count("=") != 1:
 #     raise ValueError("Need valid equation")
 
-# expression = simplify_expression(expression)
 # print(expression_to_string(expression))
 
 # left_highest = find_highest_derivative(expression.arguments[0])
