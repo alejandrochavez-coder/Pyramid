@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Callable
 from enum import Enum, auto
+import itertools
 
 class MathProperties(Enum):
     ASOCIATIVE = auto()
@@ -147,6 +148,63 @@ def pre_compute_expression_leaves(expression: Expression, bindings: dict[str, Bi
 
 #     return expression
 
+def simplify_asociatives(expression: Expression, bindings: dict[str, Binding]) -> Expression:
+    token = expression.token
+    binding = bindings.get(token)
+
+    if not binding or MathProperties.ASOCIATIVE not in binding.properties:
+        return expression
+
+    simplified = Expression(token, [])
+
+    for argument in expression.arguments:
+
+        if argument.token == token:
+            simplified.arguments.extend(argument.arguments)
+        else:
+            simplified.arguments.append(argument)
+
+    return simplified
+
+def simplify_identity(expression: Expression, bindings: dict[str, Binding]) -> Expression:
+    token = expression.token
+    binding = bindings.get(token)
+
+    if not binding or MathProperties.ASOCIATIVE not in binding.properties:
+        return expression
+
+    simplified = Expression(token, [])
+
+    for left, right in list(itertools.combinations(expression.arguments, 2)):
+        if left.token == binding.default:
+            simplified.arguments.append(right)
+            continue
+    
+        if right.token == binding.default:
+            simplified.arguments.append(left)
+            continue
+
+        # print(expression_to_string(left))
+        # print(expression_to_string(right))
+        # print()
+
+        # A^-1 * A = 1
+        if (left.token == "^" and left.arguments[1].token == "-1" and left.arguments[0].token == right.token or
+            right.token == "^" and right.arguments[1].token == "-1" and right.arguments[0].token == left.token):
+
+            simplified.arguments.append(Expression("1", None))
+            continue
+
+        if not simplified.arguments:
+            simplified.arguments.append(left)
+
+        simplified.arguments.append(right)
+
+    return simplified
+
+# def simplify_
+
+# https://en.wikipedia.org/wiki/Tree_traversal#Post-order,_LRN
 def simplify_expression(expression: Expression, bindings: dict[str, Binding]) -> Expression:
 
     if not expression.arguments:
@@ -157,23 +215,26 @@ def simplify_expression(expression: Expression, bindings: dict[str, Binding]) ->
 
     token = expression.token
 
-    simplified = Expression(token, [])
-    for argument in expression.arguments:
+    expression = simplify_asociatives(expression, bindings)
+    expression = simplify_identity(expression, bindings)
 
-        if argument.token == token and MathProperties.ASOCIATIVE in bindings[token].properties:
-            simplified.arguments.extend(argument.arguments)
-        else:
-            simplified.arguments.append(argument)
+    if len(expression.arguments) == 1 and not expression.arguments[0].arguments:
+        simplified = Expression(expression.arguments[0].token, None)
+        expression = simplify_expression(simplified, bindings)
 
     if token == "-":
         right = expression.arguments[1]
         right = Expression("*", [Expression("-1", None), right])
-        right = simplify_expression(right, bindings)
 
-        return Expression("+", [expression.arguments[0], right])
+        simplified = Expression("+", [expression.arguments[0], right])
+        expression = simplify_expression(simplified, bindings)
 
-    if simplified.arguments:
-        return simplified
+    if token == "/":
+        right = expression.arguments[1]
+        right = Expression("^", [right, Expression("-1", None)])
+
+        simplified = Expression("*", [expression.arguments[0], right])
+        expression = simplify_expression(simplified, bindings)
     
     return expression
 
@@ -199,19 +260,24 @@ bindings: dict[str, Binding] = {
     "-": Binding(1, "0", []),
     "*": Binding(2, "1", [MathProperties.ASOCIATIVE]),
     "/": Binding(2, "1", []),
+    "^": Binding(3, "1", []),
     "=": Binding(0, "x'", [])
 }
 
 # tokens = tokenize("- 1 + (x'' * 3) - 1 + 1 + x * x'", bindings)
 # tokens = tokenize("x + 2 * 3 + 7 + 2 - 5 * 3", bindings)
 # tokens = tokenize("- 1 + (x'' * 3) - 1 + 1 + x * x'", bindings)
-tokens = tokenize("4 + x + 4 - x", bindings)
+tokens = tokenize("(a ^ (-1)) * a * b", bindings)
 # print(tokens)
 
 expression = tokens_to_expression(tokens, bindings)
 expression = simplify_expression(expression, bindings)
+# expression = simplify_identity(expression, bindings)
+
 
 print(expression_to_string(expression))
+
+
 # if tokens.count("=") != 1:
 #     raise ValueError("Need valid equation")
 
