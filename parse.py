@@ -3,8 +3,10 @@ from typing import Callable
 from enum import Enum, auto
 import itertools
 
-class MathProperties(Enum):
-    ASOCIATIVE = auto()
+class OperatorProperties(Enum):
+    RIGHT_ASSOCIATIVE = auto()
+    UNARY_POSTFIX = auto()
+    BINARY = auto()
 
 @dataclass
 class Expression():
@@ -12,35 +14,10 @@ class Expression():
     arguments: list[Expression]
 
 @dataclass
-class Binding():
+class OperatorInfo():
     priority: int
-    default: str
-    properties: list[MathProperties]
-    evaluation: Callable[[float, float], float] | None = None
-
-def tokenize(equation: str, bindings: dict[str, Binding]) -> list[str]:
-    tokens: list[str] = []
-    buffer: str = ""
-
-    for char in equation:
-
-        if char == " ":
-            continue
-
-        if char not in bindings.keys() | {"(", ")"}:
-            buffer += char
-            continue
-
-        if buffer:
-            tokens.append(buffer) 
-
-        tokens.append(char)
-        buffer = ""
-
-    if buffer:
-        tokens.append(buffer)
-
-    return tokens
+    properties: list[OperatorProperties]
+    # identity: str
 
 # https://en.wikipedia.org/wiki/Polish_notation
 def expression_to_string(expression: Expression) -> str:
@@ -54,60 +31,8 @@ def expression_to_string(expression: Expression) -> str:
 
     return f"({expression.token} {" ".join(arguments)})"
 
-# https://en.wikipedia.org/wiki/Operator-precedence_parser
-def tokens_to_expression(tokens: list[str], bindings: dict[str, Binding], right_binding: float = 0) -> Expression:
-    binding = bindings.get(tokens[-1])
-    if binding:
-        tokens.append(binding.default)
-    
-    right = Expression(tokens.pop(), [])
-    if right.token == ")":
-        right = tokens_to_expression(tokens, bindings, 0)
-        tokens.pop()
-        
-    while tokens:
-        peek = tokens[-1]
-        if peek == "(" or bindings[peek].priority < right_binding:
-            break
-
-        operator = tokens.pop()
-
-        if tokens:
-            left = tokens_to_expression(tokens, bindings, bindings[operator].priority)
-        else:
-            left = Expression(bindings[operator].default, None)
-
-        right = Expression(peek, [left, right])
-
-    return right
-
-# # https://en.wikipedia.org/wiki/Depth-first_search
-# def isolate_highest_derivative(expression: Expression):
-#     stack: list[Expression] = []
-#     stack.append(expression)
-
-#     while stack:
-#         current = stack.pop()
-#         token = current.token
-
-#         # print(token)
-#         if current.arguments:
-#             pass
-
-#         stack.extend(current.arguments)
-
-    # print(expression.token)
-
-    # for argument in expression.arguments:
-    #     isolate_highest_derivative(argument)
-
-    # if expression.token == "=":
-        
-    #     left = expression.arguments[0]
-    #     right = expression.arguments[1]
-
 # https://en.wikipedia.org/wiki/Tree_traversal#Reverse_post-order,_RLN
-def pre_compute_expression_leaves(expression: Expression, bindings: dict[str, Binding]) -> Expression:
+def pre_compute_expression_leaves(expression: Expression, bindings: dict[str, OperatorInfo]) -> Expression:
     if not expression.arguments:
         return expression
     
@@ -128,31 +53,11 @@ def pre_compute_expression_leaves(expression: Expression, bindings: dict[str, Bi
     except ValueError:
         return expression
 
-# def pre_compute_expression_communitatives(expression: Expression) -> Expression:
-#     if not expression.arguments:
-#         return expression
-
-#     expression.arguments[0] = pre_compute_expression_communitatives(expression.arguments[0])
-#     expression.arguments[1] = pre_compute_expression_communitatives(expression.arguments[1])
-
-#     if expression.token == "-":
-#         right = expression.arguments[1]
-#         # right.token = f"-{right.token}"
-
-#         # return Expression("+", [expression.arguments[0], right])
-#         print(expression_to_string(expression))
-#     #     right = expression.arguments[1]
-
-#     #     expression.arguments[1] = Expression(f"-{right.token}", None)
-#     #     expression.token = "+"
-
-#     return expression
-
-def simplify_asociatives(expression: Expression, bindings: dict[str, Binding]) -> Expression:
+def simplify_asociatives(expression: Expression, bindings: dict[str, OperatorInfo]) -> Expression:
     token = expression.token
     binding = bindings.get(token)
 
-    if not binding or MathProperties.ASOCIATIVE not in binding.properties:
+    if not binding or OperatorProperties.RIGHT_ASSOCIATIVE not in binding.properties:
         return expression
 
     simplified = Expression(token, [])
@@ -166,21 +71,21 @@ def simplify_asociatives(expression: Expression, bindings: dict[str, Binding]) -
 
     return simplified
 
-def simplify_identity(expression: Expression, bindings: dict[str, Binding]) -> Expression:
+def simplify_identity(expression: Expression, bindings: dict[str, OperatorInfo]) -> Expression:
     token = expression.token
     binding = bindings.get(token)
 
-    if not binding or MathProperties.ASOCIATIVE not in binding.properties:
+    if not binding or OperatorProperties.RIGHT_ASSOCIATIVE not in binding.properties:
         return expression
 
     simplified = Expression(token, [])
 
     for left, right in list(itertools.combinations(expression.arguments, 2)):
-        if left.token == binding.default:
+        if left.token == binding.identity:
             simplified.arguments.append(right)
             continue
     
-        if right.token == binding.default:
+        if right.token == binding.identity:
             simplified.arguments.append(left)
             continue
 
@@ -205,7 +110,7 @@ def simplify_identity(expression: Expression, bindings: dict[str, Binding]) -> E
 # def simplify_
 
 # https://en.wikipedia.org/wiki/Tree_traversal#Post-order,_LRN
-def simplify_expression(expression: Expression, bindings: dict[str, Binding]) -> Expression:
+def simplify_expression(expression: Expression, bindings: dict[str, OperatorInfo]) -> Expression:
 
     if not expression.arguments:
         return expression
@@ -254,25 +159,73 @@ def find_highest_derivative(expression: Expression) -> str:
             derivative = derivative_attempt
 
     return derivative
+
+def tokenize(equation: str, bindings: dict[str, OperatorInfo]) -> list[str]:
+    tokens: list[str] = []
+    buffer: str = ""
+
+    for char in equation:
+
+        if char == " ":
+            continue
+
+        if char not in bindings.keys() | {"(", ")"}:
+            buffer += char
+            continue
+
+        if buffer:
+            tokens.append(buffer) 
+
+        tokens.append(char)
+        buffer = ""
+
+    if buffer:
+        tokens.append(buffer)
+
+    return tokens
+
+# https://en.wikipedia.org/wiki/Operator-precedence_parser
+def tokens_to_expression(tokens: list[str], bindings: dict[str, OperatorInfo], right_binding: float = 0) -> Expression:
+    right = Expression(tokens.pop(), [])
+
+    if right.token == ")":
+        right = tokens_to_expression(tokens, bindings, 0)
+        tokens.pop()
+        
+    while tokens:
+        peek = tokens[-1]
+
+        if peek == "(" or bindings[peek].priority < right_binding:
+            break
+
+        operator = tokens.pop()
+
+        if OperatorProperties.UNARY_POSTFIX in bindings[peek].properties and (not tokens or tokens[-1] in bindings):
+            right = Expression(operator, [right])
+            continue
+
+        if OperatorProperties.BINARY in bindings[peek].properties and tokens:
+            left = tokens_to_expression(tokens, bindings, bindings[operator].priority)
+            right = Expression(operator, [left, right])
+
+    return right
     
-bindings: dict[str, Binding] = {
-    "+": Binding(1, "0", [MathProperties.ASOCIATIVE]),
-    "-": Binding(1, "0", []),
-    "*": Binding(2, "1", [MathProperties.ASOCIATIVE]),
-    "/": Binding(2, "1", []),
-    "^": Binding(3, "1", []),
-    "=": Binding(0, "x'", [])
+bindings: dict[str, OperatorInfo] = {
+    "+": OperatorInfo(1, [OperatorProperties.RIGHT_ASSOCIATIVE, OperatorProperties.BINARY, OperatorProperties.UNARY_POSTFIX]),
+    "-": OperatorInfo(1, [OperatorProperties.BINARY, OperatorProperties.UNARY_POSTFIX]),
+    # "*": Operator(2, "1", [OperatorProperties.RIGHT_ASSOCIATIVE]),
+    # "/": Operator(2, "1", []),
+    # "^": Operator(3, "1", []),
+    # "=": Operator(0, "x'", [])
 }
 
 # tokens = tokenize("- 1 + (x'' * 3) - 1 + 1 + x * x'", bindings)
 # tokens = tokenize("x + 2 * 3 + 7 + 2 - 5 * 3", bindings)
 # tokens = tokenize("- 1 + (x'' * 3) - 1 + 1 + x * x'", bindings)
-tokens = tokenize("(a ^ (-1)) * a * b", bindings)
+tokens = tokenize("--1 - (1 + 3)", bindings)
 # print(tokens)
-
 expression = tokens_to_expression(tokens, bindings)
-expression = simplify_expression(expression, bindings)
-# expression = simplify_identity(expression, bindings)
+# expression = simplify_expression(expression, bindings)
 
 
 print(expression_to_string(expression))
