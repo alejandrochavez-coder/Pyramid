@@ -24,7 +24,7 @@ class RightIdentity:
     identity: str
 
 @dataclass
-class Invertible:
+class OperatorInverse:
     pass
 
 class UnaryPostfix:
@@ -39,7 +39,7 @@ class OpenParenthesis:
 class CloseParenthesis:
     pass
 
-class LeftAssociative:
+class Associative:
     pass
 
 @dataclass
@@ -120,67 +120,103 @@ def parse(tokens: list[Token], right_priority: int = 0) -> Expression:
 
     return right
 
-def simplify_operators(expression: Exception, operators: dict[str, dict[type, object]]) -> Expression:
-    minus_one_token = Token({Value: Value("-1"), Operand: Operand()})
-    minus_one = Expression(minus_one_token, [])
-    value = cast(Value, expression.token.components[Value]).value
+# def remove_non_essential_operators(expression: Expression, operators: dict[str, dict[type, object]]) -> Expression:
+#     minus_one_token = Token({Value: Value("-1"), Operand: Operand()})
+#     minus_one = Expression(minus_one_token, [])
+#     value = cast(Value, expression.token.components[Value]).value
 
-    if value == "/":
-        simplified = Expression(Token(operators["*"]), [])
-        for argument in expression.arguments:
-            simplified_argument = Expression(Token(operators["^"]), [argument, minus_one])
-            simplified.arguments.append(simplified_argument)
+#     if value == "/":
+#         simplified = Expression(Token(operators["*"]), [])
+#         for argument in expression.arguments:
+#             simplified_argument = Expression(Token(operators["^"]), [argument, minus_one])
+#             simplified.arguments.append(simplified_argument)
 
-        simplified.arguments[0] = expression.arguments[0]
-        return simplified
+#         simplified.arguments[0] = expression.arguments[0]
+#         return simplified
 
-    if value == "-":
-        simplified = Expression(Token(operators["+"]), [])
-        for argument in expression.arguments:
-            simplified_argument = Expression(Token(operators["*"]), [argument, minus_one])
-            simplified.arguments.append(simplified_argument)
+#     if value == "-":
+#         simplified = Expression(Token(operators["+"]), [])
+#         for argument in expression.arguments:
+#             simplified_argument = Expression(Token(operators["*"]), [argument, minus_one])
+#             simplified.arguments.append(simplified_argument)
 
-        simplified.arguments[0] = expression.arguments[0]
-        return simplified
+#         simplified.arguments[0] = expression.arguments[0]
+#         return simplified
 
-    return expression
+#     return expression
 
-def simplify_associatives(expression: Expression) -> Expression:
-    if not LeftAssociative in expression.token.components:
+def group_associatives(expression: Expression) -> Expression:
+    if not Associative in expression.token.components:
         return expression
 
-    value = cast(Value, expression.token.components[Value]).value
+    operator_value = cast(Value, expression.token.components[Value]).value
     simplified = Expression(expression.token, [])
 
     for argument in expression.arguments:
-        argument_value = cast(Value, expression.token.components[Value]).value
+        argument_value = cast(Value, argument.token.components[Value]).value
 
-        if value == argument_value:
+        if operator_value == argument_value:
             simplified.arguments.extend(argument.arguments)
         else:
             simplified.arguments.append(argument)
 
     return simplified
-        
+
 def simplify_identities(expression: Expression) -> Expression:
+    if (Operand in expression.token.components or
+        (not RightIdentity in expression.token.components and
+        not LeftIdentity in expression.token.components)):
 
-    for left, right in list(itertools.combinations(expression.arguments, 2)):
-        left_value = cast(Value, left.token.components[Value]).value
+        return expression
+
+    simplified_expressions: list[Expression] = []
+
+    right_identity_component = cast(RightIdentity, expression.token.components.get(RightIdentity))
+    left_identity_component = cast(LeftIdentity, expression.token.components.get(LeftIdentity))
+
+    for left, right in list(itertools.pairwise(expression.arguments)):
         right_value = cast(Value, right.token.components[Value]).value
-        
-        if LeftIdentity in expression.token.components:
+        left_value = cast(Value, left.token.components[Value]).value
 
+        is_right_identity = right_identity_component and right_value == right_identity_component.identity
+        is_left_identity = left_identity_component and left_value == left_identity_component.identity
 
+        if is_right_identity and is_left_identity:
+            continue
 
-def simplify(expression: Expression, operators: dict[str, dict[type, object]]) -> Expression:
+        if is_left_identity:
+            simplified_expressions.append(right)
+            continue
+
+        if is_right_identity:
+            simplified_expressions.append(left)
+            continue
+
+        # if not simplified_expressions:
+        #     simplified_expressions.append(left)
+
+        simplified_expressions.append(right)
+
+    if not simplified_expressions:
+        zero_token = Token({Value: Value("0"), Operand: Operand()})
+        return Expression(zero_token, [])
+
+    return Expression(expression.token, simplified_expressions)
+
+def simplify(expression: Expression) -> Expression:
 
     if not expression.arguments:
         return expression
     
     for index, argument in enumerate(expression.arguments):
-        expression.arguments[index] = simplify(argument, operators)
+        expression.arguments[index] = simplify(argument)
 
-    expression = simplify_operators(expression, operators)
+    # expression = remove_non_essential_operators(expression, operators)
+    expression = group_associatives(expression)
+    print(expression)
+    expression = simplify_identities(expression)
+    print(expression)
+    print()
         
     return expression
 
@@ -193,7 +229,7 @@ operators["+"] = {
     Value: Value("+"),
     Operator: Operator(priority=1),
     UnaryPostfix: UnaryPostfix(),
-    LeftAssociative: LeftAssociative(),
+    Associative: Associative(),
     RightIdentity: RightIdentity("0"),
     LeftIdentity: LeftIdentity("0")
 }
@@ -208,25 +244,28 @@ operators["-"] = {
 operators["*"] = {
     Value: Value("*"),
     Operator: Operator(priority=2), 
-    LeftAssociative: LeftAssociative()
+    Associative: Associative(),
+    RightIdentity: RightIdentity("1"),
+    LeftIdentity: LeftIdentity("1")
 }
 
 operators["/"] = {
     Value: Value("/"), 
-    Operator: Operator(priority=2)
+    Operator: Operator(priority=2),
+    RightIdentity: RightIdentity("1")
 }
 
 operators["^"] = {
     Value: Value("^"), 
     Operator: Operator(priority=3), 
-    LeftAssociative: LeftAssociative()
+    Associative: Associative()
 }
 
-tokens = tokenize("a / b * b ^ 2 - 2", operators)
+tokens = tokenize("2 + a + 0 + 0 - 0", operators)
 
 try:
     expression = parse(tokens)
-    expression = simplify(expression, operators)
+    expression = simplify(expression)
     print(expression)
 except ValueError as error:
     print(str(error))
