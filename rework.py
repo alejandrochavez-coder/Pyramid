@@ -162,6 +162,14 @@ def simplify_associatives(expression: Expression) -> Expression:
 
     return simplified
         
+def simplify_identities(expression: Expression) -> Expression:
+
+    for left, right in list(itertools.combinations(expression.arguments, 2)):
+        left_value = cast(Value, left.token.components[Value]).value
+        right_value = cast(Value, right.token.components[Value]).value
+        
+        if LeftIdentity in expression.token.components:
+
 
 
 def simplify(expression: Expression, operators: dict[str, dict[type, object]]) -> Expression:
@@ -172,29 +180,7 @@ def simplify(expression: Expression, operators: dict[str, dict[type, object]]) -
     for index, argument in enumerate(expression.arguments):
         expression.arguments[index] = simplify(argument, operators)
 
-    # value = cast(Value, expression.token.components[Value]).value
-    # minus_one_token = Token({Value: Value("-1"), Operand: Operand()})
-    # minus_one = Expression(minus_one_token, [])
-
     expression = simplify_operators(expression, operators)
-    # expression = simplify_associatives(expression)
-    
-    # simplified = Expression(expression.token, [])
-
-    # for argument in expression.arguments:
-    #     argument_value = cast(Value, expression.token.components[Value]).value
-    #     if not LeftAssociative in expression.token.components:
-    #         simplified.arguments.append(argument)
-    #         continue
-
-    #     if value != argument_value:
-    #         simplified.arguments.append(argument)
-    #         continue
-
-    #     if LeftAssociative in argument.token.components:
-    #         simplified.arguments.extend(argument.arguments)
-
-        
         
     return expression
 
