@@ -16,6 +16,14 @@ class Operator:
     priority: int
 
 @dataclass
+class LeftIdentity:
+    identity: str
+
+@dataclass
+class RightIdentity:
+    identity: str
+
+@dataclass
 class Invertible:
     pass
 
@@ -191,13 +199,41 @@ def simplify(expression: Expression, operators: dict[str, dict[type, object]]) -
     return expression
 
 operators: dict[str, dict[type, object]] = {
-    "+": {Value: Value("+"), Operator: Operator(priority=1), UnaryPostfix: UnaryPostfix(), LeftAssociative: LeftAssociative()},
-    "-": {Value: Value("-"), Operator: Operator(priority=1), UnaryPostfix: UnaryPostfix()},
-    "*": {Value: Value("*"), Operator: Operator(priority=2), LeftAssociative: LeftAssociative()},
-    "/": {Value: Value("/"), Operator: Operator(priority=2)},
-    "^": {Value: Value("^"), Operator: Operator(priority=3), LeftAssociative: LeftAssociative()},
     "(": {OpenParenthesis: OpenParenthesis()},
     ")": {CloseParenthesis: CloseParenthesis()}
+}
+
+operators["+"] = {
+    Value: Value("+"),
+    Operator: Operator(priority=1),
+    UnaryPostfix: UnaryPostfix(),
+    LeftAssociative: LeftAssociative(),
+    RightIdentity: RightIdentity("0"),
+    LeftIdentity: LeftIdentity("0")
+}
+
+operators["-"] = {
+    Value: Value("-"),
+    Operator: Operator(priority=1),
+    UnaryPostfix: UnaryPostfix(),
+    RightIdentity: RightIdentity("0")
+}
+
+operators["*"] = {
+    Value: Value("*"),
+    Operator: Operator(priority=2), 
+    LeftAssociative: LeftAssociative()
+}
+
+operators["/"] = {
+    Value: Value("/"), 
+    Operator: Operator(priority=2)
+}
+
+operators["^"] = {
+    Value: Value("^"), 
+    Operator: Operator(priority=3), 
+    LeftAssociative: LeftAssociative()
 }
 
 tokens = tokenize("a / b * b ^ 2 - 2", operators)
