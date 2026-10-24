@@ -170,6 +170,7 @@ def simplify(expression: Expression, operators: dict[str, dict[type, object]]) -
 
     expression = simplify_operators(expression, operators)
     # expression = simplify_associatives(expression)
+    
     # simplified = Expression(expression.token, [])
 
     # for argument in expression.arguments:
